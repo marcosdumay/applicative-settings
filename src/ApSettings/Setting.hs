@@ -96,14 +96,14 @@ structure = StructureSett
 onKey :: Key -> Setting a -> Setting a
 onKey k r = KeySett k r
 
-defVal :: Setting a -> a -> Setting a
-defVal m v = DefSett v m
+defaultTo :: Setting a -> a -> Setting a
+defaultTo m v = DefSett v m
 
 description :: Setting a -> Text -> Setting a
 description m d = DocSett d m
 
-optional :: Setting a -> Setting (Maybe a)
-optional s = (Just <$> s) `defVal` Nothing
+get :: (Setting a -> Setting a) -> ScalarReader a -> Setting a
+get s r = s $ ScalarSett r
 
 -- | After reading, those errors may appear
 data SettingError =

@@ -26,17 +26,16 @@ data BareData =
   Structure (M.HashMap Key BareData)
 
 
+data ValueError =
+  ValueNotFound -- ^ There is no value
+  | InvalidFormat Text Text -- ^ The data format is different from the expected: `InvalidFormat expected found`
+  | ErrorMessage Text -- ^ An error message on reading
+
 display :: BareValue -> Text
 display (TextualValue t) = T.pack . show $ t
 display (NumericValue n) = T.pack . show $ n
 display (BooleanValue b) = if b then "true" else "false"
-
 display EmptyValue = "null"
-
-data ValueError =
-  ValueNotFound -- ^ There is no value
-  | InvalidFormat Text Text -- ^ The data format is different from the expected: `InvalidFormat expected found`
-  | InvalidValue BareValue -- ^ The data can not be parsed into a high level value
 
 type Value a = Either ValueError a
 
@@ -48,7 +47,6 @@ instance Monoid (Value a) where
 statusMessage :: ValueError -> Text
 statusMessage ValueNotFound = "not found"
 statusMessage (InvalidFormat a b) = "invalid format, expected " <> a <> ", found " <> b
-statusMessage (InvalidValue val) = "parser error on " <> display val
 
 unStructure :: BareData -> Either ValueError (HashMap Key BareData)
 unStructure (Structure s) = Right s
