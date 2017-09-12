@@ -27,25 +27,25 @@ data Sett000 = Sett000 {key0 :: Text, key1:: Text, key2 :: [Text],
 
 sett0 :: Setting Sett0
 sett0 = structure $ Sett0 <$>
-  onKey "key0" `get` scalar text <*>
-  onKey "key1" `get` scalar text <*>
-  onKey "key2" `get` multiple (scalar text)
+  onKey "key0" `scalar` text <*>
+  onKey "key1" `scalar` text <*>
+  onKey "key2" `multiple` value text
 expected0 :: Sett0
 expected0 = Sett0 "value0" "value1" ["value20", "value21"]
 
 sett000 :: Setting Sett000
 sett000 = Sett000 <$>
-  onKey "key0" `get` scalar text <*>
-  onKey "key1" `get` scalar text <*>
-  onKey "key2" `get` multiple (scalar text) <*>
+  onKey "key0" `scalar` text <*>
+  onKey "key1" `scalar` text <*>
+  onKey "key2" `multiple` value text <*>
   onKey "key3" (structure $  Sett0003 <$>
-                   onKey "key30" `get` scalar text <*>
-                   onKey "key31" `get` multiple (scalar text)
+                   onKey "key30" `scalar` text <*>
+                   onKey "key31" `multiple` value text
                ) <*>
-  onKey "key4" `get` scalar bool <*>
-  onKey "key5" `get` scalar integral <*>
-  onKey "key6" `get` scalar text <*>
-  onKey "key7" `get` scalar real
+  onKey "key4" `scalar` bool <*>
+  onKey "key5" `scalar` integral <*>
+  onKey "key6" `scalar` text <*>
+  onKey "key7" `scalar` real
 expected000 :: Sett000
 expected000 = Sett000 "value0" "value1" ["value20", "value21"] (
   Sett0003 "value30" ["value310", "value311"]

@@ -117,20 +117,6 @@ readshow a = case readMaybe . show $ a of
   Nothing -> Left . ErrorMessage $ "could not parse value " <> showText a
   Just v -> Right v
 
-scalar :: (BareValue -> Value a) -> BareData -> Value a
-scalar f (Scalar a) = f a
-scalar _ Multiple{} = Left $ InvalidFormat "scalar" "list"
-scalar _ Structure{} = Left $ InvalidFormat "scalar" "structure"
-
-multiple :: (BareData -> Value a) -> BareData -> Value [a]
-multiple f v@Scalar{} = (:[]) <$> f v
-multiple f (Multiple aa) = mapM f aa
-multiple _ Structure{} = Left $ InvalidFormat "list" "structure"
-
-onlyMultiple :: (BareData -> Value a) -> BareData -> Value [a]
-onlyMultiple _ Scalar{} = Left $ InvalidFormat "list" "scalar"
-onlyMultiple f a = multiple f a
-
 showText :: Show a => a -> Text
 showText = T.pack . show
 

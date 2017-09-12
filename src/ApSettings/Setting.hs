@@ -1,4 +1,4 @@
-{-# LANGUAGE ExistentialQuantification, RankNTypes, GADTs #-}
+{-# LANGUAGE ExistentialQuantification, RankNTypes #-}
 
 {- |
 
@@ -6,7 +6,7 @@ What is expected here is:
 
 1 - Construct a SettingsModel applicative using high level functions
 
-2 - MyData <$> onKey "Field1" readField1 `description` "description 1" <*> onKey "Field2" readField2 :: SettingModel MyData
+2 - MyData <$> onKey "Field1" `scalar` text `description` "description 1" <*> onKey "Field2" `scalar` integral :: SettingModel MyData
 
 3 - moncat <$> mapM parseFile settingsModel [(reader, fileName)] :: IO (Setting MyData)
 
@@ -32,9 +32,12 @@ type ReadStatus = Value ()
 type StructReader a = Key -> BareData -> Value a
 mapStruct :: (a -> b) -> StructReader a -> StructReader b
 mapStruct f ra = \k m -> let va = ra k m in f <$> va
-type ScalarReader a = BareData -> Value a
+type ScalarReader a = BareValue -> Value a
 mapScalar :: (a -> b) -> ScalarReader a -> ScalarReader b
 mapScalar f ra = \bare -> let va = ra bare in f <$> va
+
+mapList :: ([a] -> [b]) -> a -> b
+mapList f a = head $ f [a]
 
 {- |
 A description of your settings
@@ -56,7 +59,7 @@ KeySett already implies a structure. Instead, this
 is used to group the structure into a single setting that can recieve a description
 or a default value, marking it optional or other kinds of global effects.
 -}
---  | ListSett (Setting a) -- ^ Unwraps a Multiple value when reading
+  | forall b. ListSett ([b] -> a) (Setting b) -- ^ Unwraps a Multiple value when reading
   | KeySett Key (Setting a) -- ^ Does key lookup on structures
   | forall b. MultiSett (Setting (b -> a)) (Setting b) -- ^ Setting application
   | AltSett (Setting a) (Setting a) -- ^ Setting alternatives
@@ -67,7 +70,9 @@ instance Functor Setting where
   fmap f (ConstSett a) = ConstSett $ f <$> a
   fmap f (ScalarSett a) = ScalarSett $ mapScalar f a
   fmap f (StructureSett a) = StructureSett $ f <$> a
---  fmap f (ListSett a) = ListSett $ fmap f a
+  -- <$> :: (a -> b) -> Sett a -> Sett b
+  -- (?) :: ([a] -> [b]) -> (a -> b)
+  fmap f (ListSett g a) = ListSett (f.g) a
   fmap f (KeySett k r) = KeySett k $ f <$> r
   fmap f (MultiSett g a) = MultiSett ((f.) <$> g) a
   fmap f (AltSett a b) = AltSett (f <$> a) $ f <$> b
@@ -102,8 +107,14 @@ defaultTo m v = DefSett v m
 description :: Setting a -> Text -> Setting a
 description m d = DocSett d m
 
-get :: (Setting a -> Setting a) -> ScalarReader a -> Setting a
-get s r = s $ ScalarSett r
+value :: ScalarReader a -> Setting a
+value = ScalarSett
+
+scalar :: (Setting a -> Setting a) -> ScalarReader a -> Setting a
+scalar s r = s $ ScalarSett r
+
+multiple :: (Setting [a] -> Setting [a]) -> Setting a -> Setting [a]
+multiple s r = s $ ListSett id r
 
 -- | After reading, those errors may appear
 data SettingError =
@@ -121,7 +132,13 @@ catErrors a b = MultipleErrors [a, b]
 readData :: Setting a -> BareData -> Either SettingError a
 readData (ConstSett Nothing) _ = Left SettingNotFound
 readData (ConstSett (Just a)) _ = Right a
-readData (ScalarSett reader) d = unValue $ reader d
+readData (ScalarSett reader) d = do
+  d' <- unValue $ unScalar d
+  unValue $ reader d'
+readData (ListSett f s) d = do
+  dd <- unValue . unMultiple $ d
+  vv <- mapM (readData s) dd
+  pure $ f vv
 readData (StructureSett m) d = readData m d
 readData (KeySett key reader) d = mapLeft (ErrorInKey key) $
   do
