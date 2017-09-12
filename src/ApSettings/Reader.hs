@@ -9,8 +9,8 @@ import qualified Data.Text as T
 import ApSettings.Values
 import qualified ApSettings.Reader.Yaml as Y
 import qualified Data.Scientific as Sci
-import Data.Maybe (isJust)
-import Data.Text.Encoding (encodeUtf8, decodeUtf8')
+--import Data.Maybe (isJust)
+--import Data.Text.Encoding (encodeUtf8, decodeUtf8')
 import Text.Read (readMaybe)
 import qualified Data.Char as C
 
@@ -36,15 +36,15 @@ withText f (UntypedText t) = case f . fromString . T.unpack $ t of
 withText f (TextualValue t) = withText f $ UntypedText t
 withText f (NumericValue n) = withText f . UntypedText . showText $ n
 withText f (BooleanValue b) = withText f . UntypedText . showText $ b
-withText f EmptyValue = emptymsg
+withText _ EmptyValue = emptymsg
 
 integral :: (Read a, Integral a) => BareValue -> Value a
 integral = i
   where
-    convInt :: (Read a, Integral a) => Sci.Scientific -> Value a
+    convInt :: Integral a => Sci.Scientific -> Value a
     convInt n = case Sci.floatingOrInteger n of
-      Right i -> Right i
-      Left _ -> Left . ErrorMessage $ "expected integral number, found " <> showText n
+      Right i' -> Right i'
+      Left d -> let _ = d :: Double in Left . ErrorMessage $ "expected integral number, found " <> showText n
     i (UntypedText t) = tryread t
     i (TextualValue t) = tryread t
     i (NumericValue n) = convInt n
@@ -52,22 +52,22 @@ integral = i
     i EmptyValue = emptymsg
 
 bounded :: (Show a, Ord a) => a -> a -> (BareValue -> Value a) -> BareValue -> Value a
-bounded min max f v = b
+bounded min' max' f v = b
   where
     -- b :: (Show a, Ord a) => Value a
     b = case f v of
              e@(Left _) -> e
-             Right v' -> if v' < min
+             Right v' -> if v' < min'
                then Left tooLarge
-               else (if v' > max
+               else (if v' > max'
                      then Left tooSmall
                      else Right v'
                     )
-    tooLarge = ErrorMessage $ "value out of bounds, maximum was " <> showText max <> ", found " <> display v
-    tooSmall = ErrorMessage $ "value out of bounds, minium was " <> showText min <> ", found " <> display v
+    tooLarge = ErrorMessage $ "value out of bounds, maximum was " <> showText max' <> ", found " <> display v
+    tooSmall = ErrorMessage $ "value out of bounds, minium was " <> showText min' <> ", found " <> display v
 
-realfrac :: RealFloat a => BareValue -> Value a
-realfrac = rf
+real :: RealFloat a => BareValue -> Value a
+real = rf
   where
     readsci :: Text -> Value Sci.Scientific
     readsci v = tryread v
@@ -91,8 +91,8 @@ text = tx
 bool :: BareValue -> Value Bool
 bool (UntypedText t) = let
   tlow = map C.toLower . T.unpack $ t
-  isT = elem t ["1", "t", "true", "y", "yes"]
-  isF = elem t ["0", "f", "false", "n", "no"]
+  isT = elem tlow ["1", "t", "true", "y", "yes"]
+  isF = elem tlow ["0", "f", "false", "n", "no"]
   in if isT
      then pure True
      else if isF
@@ -125,7 +125,7 @@ scalar _ Structure{} = Left $ InvalidFormat "scalar" "structure"
 multiple :: (BareData -> Value a) -> BareData -> Value [a]
 multiple f v@Scalar{} = (:[]) <$> f v
 multiple f (Multiple aa) = mapM f aa
-multiple f Structure{} = Left $ InvalidFormat "list" "structure"
+multiple _ Structure{} = Left $ InvalidFormat "list" "structure"
 
 onlyMultiple :: (BareData -> Value a) -> BareData -> Value [a]
 onlyMultiple _ Scalar{} = Left $ InvalidFormat "list" "scalar"

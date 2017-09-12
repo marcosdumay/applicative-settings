@@ -3,7 +3,6 @@
 module ApSettings.Values where
 
 import Data.Monoid ((<>))
-import Control.Applicative
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Scientific (Scientific)
@@ -30,9 +29,11 @@ data ValueError =
   ValueNotFound -- ^ There is no value
   | InvalidFormat Text Text -- ^ The data format is different from the expected: `InvalidFormat expected found`
   | ErrorMessage Text -- ^ An error message on reading
+  deriving (Show)
 
 display :: BareValue -> Text
-display (TextualValue t) = T.pack . show $ t
+display (UntypedText t) = t
+display (TextualValue t) = t
 display (NumericValue n) = T.pack . show $ n
 display (BooleanValue b) = if b then "true" else "false"
 display EmptyValue = "null"
@@ -47,6 +48,7 @@ instance Monoid (Value a) where
 statusMessage :: ValueError -> Text
 statusMessage ValueNotFound = "not found"
 statusMessage (InvalidFormat a b) = "invalid format, expected " <> a <> ", found " <> b
+statusMessage (ErrorMessage m) = m
 
 unStructure :: BareData -> Either ValueError (HashMap Key BareData)
 unStructure (Structure s) = Right s

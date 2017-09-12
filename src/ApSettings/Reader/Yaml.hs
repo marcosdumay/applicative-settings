@@ -4,11 +4,9 @@ module ApSettings.Reader.Yaml (
 
 import ApSettings.Values
 import Data.Text (Text)
-import qualified Data.Text as T
 import qualified Data.Yaml as Y
-import qualified Data.HashMap.Lazy as M
 import Data.Foldable (toList)
-import Data.Text.Encoding (encodeUtf8, decodeUtf8')
+import Data.Text.Encoding (encodeUtf8)
 
 parse :: Text -> Maybe BareData
 parse t = do
@@ -23,7 +21,7 @@ parse t = do
     parseElement :: Y.Value -> BareData
     parseElement (Y.Object o) = subParse o
     parseElement (Y.Array a) = Multiple . map parseElement . toList $ a
-    parseElement (Y.String t) = Scalar $ TextualValue t
+    parseElement (Y.String t') = Scalar $ TextualValue t'
     parseElement (Y.Number n) = Scalar $ NumericValue n
     parseElement (Y.Bool b) = Scalar $ BooleanValue b
     parseElement Y.Null = Scalar EmptyValue

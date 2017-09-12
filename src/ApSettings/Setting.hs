@@ -20,8 +20,8 @@ import Control.Applicative
 import Data.Maybe (fromMaybe)
 import Data.Monoid
 import ApSettings.Values
-import Data.Default.Class
-import Data.HashMap.Lazy (HashMap)
+--import Data.Default.Class
+--import Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 
 
@@ -111,7 +111,7 @@ data SettingError =
   | ParserError
   | ErrorInKey Key SettingError
   | ErrorInValue ValueError
-  | MultipleErrors [SettingError]
+  | MultipleErrors [SettingError] deriving (Show)
 
 catErrors :: SettingError -> SettingError -> SettingError
 catErrors (MultipleErrors ee) e = MultipleErrors $ ee <> [e]
@@ -158,7 +158,9 @@ mapLeft _ (Right a) = Right a
 unValue :: Value a -> Either SettingError a
 unValue = mapLeft ErrorInValue
 
+isEmptyError :: SettingError -> Bool
 isEmptyError SettingNotFound = True
 isEmptyError (ErrorInKey _ e) = isEmptyError e
 isEmptyError (ErrorInValue ValueNotFound) = True
 isEmptyError (MultipleErrors ee) = all isEmptyError ee
+isEmptyError _ = False

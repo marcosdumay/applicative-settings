@@ -28,18 +28,3 @@ suiteSearchRc suiteName programName = do
     home ++ "./" ++ st ++ "/" ++ nm,
     "/etc/" ++ st ++ "/" ++ nm
     ]
-
--- | Usual search path for unix configuration files
-unixSearchRc :: FilePath -> FilePath -> [FilePath]
-unixSearchRc dir nm = if null dir
-                      then [
-                        nm,
-                        "~/." ++ nm,
-                        "/etc/" ++ nm
-                        ]
-                      else [
-                        nm,
-                        "~/." ++ dir ++ "/" ++ nm,
-                        "/etc/" ++ dir ++ "/" ++ nm
-                        ]
-
