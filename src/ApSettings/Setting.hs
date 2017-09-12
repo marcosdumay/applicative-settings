@@ -1,18 +1,5 @@
 {-# LANGUAGE ExistentialQuantification, RankNTypes #-}
 
-{- |
-
-What is expected here is:
-
-1 - Construct a SettingsModel applicative using high level functions
-
-2 - MyData <$> onKey "Field1" `scalar` text `description` "description 1" <*> onKey "Field2" `scalar` integral :: SettingModel MyData
-
-3 - moncat <$> mapM parseFile settingsModel [(reader, fileName)] :: IO (Setting MyData)
-
-4 - retrieve setting :: Either [ReadStatus] MyData
-
--}
 module ApSettings.Setting where
 
 import Data.Text (Text)
@@ -98,21 +85,45 @@ as optional, set with options and other operations.
 structure :: Setting a -> Setting a
 structure = StructureSett
 
+{- |
+Deferences keys on a structure, reading their value.
+-}
 onKey :: Key -> Setting a -> Setting a
 onKey k r = KeySett k r
 
+{- |
+Sets the default value of a setting.
+
+The default value is used only when a setting is
+not found, not on other errors. Also, Default
+values are applied before alternatives are decided.
+-}
 defaultTo :: Setting a -> a -> Setting a
 defaultTo m v = DefSett v m
 
+{- |
+Adds a desctiption into the setting.
+
+This has no effect on reading.
+-}
 description :: Setting a -> Text -> Setting a
 description m d = DocSett d m
 
+{- |
+Creates a setting out of a scalar value reader.
+-}
 value :: ScalarReader a -> Setting a
 value = ScalarSett
 
+{- |
+Instructs a partial setting to read a scalar value.
+-}
 scalar :: (Setting a -> Setting a) -> ScalarReader a -> Setting a
 scalar s r = s $ ScalarSett r
 
+{- |
+Instructs a partial setting to read a list of values.
+-}
 multiple :: (Setting [a] -> Setting [a]) -> Setting a -> Setting [a]
 multiple s r = s $ ListSett id r
 
