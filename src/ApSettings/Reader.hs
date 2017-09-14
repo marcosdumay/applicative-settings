@@ -7,7 +7,7 @@ import Data.Text (Text)
 import Data.String (IsString, fromString)
 import qualified Data.Text as T
 import ApSettings.Values
-import qualified ApSettings.Reader.Yaml as Y
+--import qualified ApSettings.Reader.Yaml as Y
 import qualified Data.Scientific as Sci
 --import Data.Maybe (isJust)
 --import Data.Text.Encoding (encodeUtf8, decodeUtf8')
@@ -15,10 +15,6 @@ import Text.Read (readMaybe)
 import qualified Data.Char as C
 
 type SettingsReader = T.Text -> Maybe BareData
-
--- | Reads an YAML file into unparsed data
-readYaml :: SettingsReader
-readYaml = Y.parse
 
 -- | Parses the textual representation of a scalar with a user-supplied function
 withText :: IsString t => (t -> Either Text a) -> BareValue -> Value a

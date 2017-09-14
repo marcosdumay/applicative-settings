@@ -24,6 +24,7 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:
+                  ApSettings,
                   ApSettings.Setting,
                   ApSettings.System.Unix,
                   ApSettings.Reader,

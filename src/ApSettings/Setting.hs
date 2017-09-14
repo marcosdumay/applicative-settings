@@ -1,4 +1,4 @@
-{-# LANGUAGE ExistentialQuantification, RankNTypes #-}
+{-# LANGUAGE ExistentialQuantification, RankNTypes, FlexibleInstances #-}
 
 module ApSettings.Setting where
 
@@ -11,20 +11,12 @@ import ApSettings.Values
 --import Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 
+import Debug.Trace
 
--- | Only the status information (error data or success) from reading the setting
-type ReadStatus = Value ()
 
--- | A function that turns setting data into a useable Haskell value
-type StructReader a = Key -> BareData -> Value a
-mapStruct :: (a -> b) -> StructReader a -> StructReader b
-mapStruct f ra = \k m -> let va = ra k m in f <$> va
 type ScalarReader a = BareValue -> Value a
 mapScalar :: (a -> b) -> ScalarReader a -> ScalarReader b
 mapScalar f ra = \bare -> let va = ra bare in f <$> va
-
-mapList :: ([a] -> [b]) -> a -> b
-mapList f a = head $ f [a]
 
 {- |
 A description of your settings
@@ -133,30 +125,51 @@ data SettingError =
   | ParserError
   | ErrorInKey Key SettingError
   | ErrorInValue ValueError
-  | MultipleErrors [SettingError] deriving (Show)
+  | MultipleErrors [SettingError] deriving (Read, Show, Eq, Ord)
+instance Monoid (Either SettingError a) where
+  mempty = Left SettingNotFound
+  mappend a@(Left e) b = if isEmptyError e then b else a
+  mappend a _ = a
+
 
 catErrors :: SettingError -> SettingError -> SettingError
 catErrors (MultipleErrors ee) e = MultipleErrors $ ee <> [e]
 catErrors e (MultipleErrors ee) = MultipleErrors $ e : ee
 catErrors a b = MultipleErrors [a, b]
 
-readData :: Setting a -> BareData -> Either SettingError a
-readData (ConstSett Nothing) _ = Left SettingNotFound
-readData (ConstSett (Just a)) _ = Right a
-readData (ScalarSett reader) d = do
-  d' <- unValue $ unScalar d
-  unValue $ reader d'
-readData (ListSett f s) d = do
-  dd <- unValue . unMultiple $ d
-  vv <- mapM (readData s) dd
-  pure $ f vv
-readData (StructureSett m) d = readData m d
-readData (KeySett key reader) d = mapLeft (ErrorInKey key) $
+readData :: Setting a -> [BareData] -> Either SettingError a
+readData (ConstSett Nothing) = const $ Left SettingNotFound
+readData (ConstSett (Just a)) = const $ Right a
+readData (ScalarSett reader) = foldMap $ \d ->
   do
-    v <- unValue $ unStructure d
-    d' <- unValue . fromMaybe (Left ValueNotFound) $ Right <$> M.lookup key v
+    r <- unValue $ unScalar d
+    unValue $ reader r
+readData (ListSett f s) = \d -> do
+    dd <- mapM (unValue . unMultiple) d
+    -- dd :: [[BareValue]]
+    -- Now, what does that mean?
+    -- I must take the first list available in the settings,
+    -- and drop anything else. Unless that is empty too,
+    -- in case I take the second element, and so on.
+    let unwrap ll = case ll of
+          [] -> Left . ErrorInValue $ ValueNotFound
+          (d':dd') -> case mapM (readData s) $ map (\x -> [x]) d' of
+            Left e -> if isEmptyError e then unwrap dd' else Left e
+            Right vv -> traceShow (length vv) $ pure $ f vv
+    traceShow dd $ unwrap dd
+readData (StructureSett m) = readData m
+readData (KeySett key reader) = \d -> mapLeft (ErrorInKey key) $
+  do
+    v <- mapM (unValue . unStructure) d
+    let
+      lkup :: M.HashMap Key BareData -> Either SettingError BareData
+      lkup val = let
+        v' = M.lookup key val :: Maybe BareData
+        ve = fromMaybe (Left ValueNotFound) $ Right <$> v' :: Either ValueError BareData
+        in unValue ve
+    d' <- mapM lkup v
     readData reader d'
-readData (MultiSett f x) d = let
+readData (MultiSett f x) = \d -> let
   vf = readData f d
   vx = readData x d
   in apSett vf vx
@@ -165,19 +178,22 @@ readData (MultiSett f x) d = let
     apSett (Left a) (Right _) = Left a
     apSett (Right _) (Left b) = Left b
     apSett (Right a) (Right b) = Right $ a b
-readData (AltSett a b) d = let
+readData (AltSett a b) = \d -> let
   sa = readData a d
   sb = readData b d
   in case sa of
     Left e -> if isEmptyError e then sb else sa
     _ -> sa
-readData (DefSett a s) d = let
+readData (DefSett a s) = \d -> let
   vs = readData s d
   in case vs of
        Left e -> if isEmptyError e then pure a else vs
        _ -> vs
-readData (DocSett _ s) d = readData s d
-readData (LitSett _ s) d = readData s d
+readData (DocSett _ s) = readData s
+readData (LitSett _ s) = readData s
+
+evaluateSetting :: Setting a -> [BareData] -> Either SettingError a
+evaluateSetting = readData
 
 mapLeft :: (a -> c) -> Either a b -> Either c b
 mapLeft f (Left e) = Left $ f e
@@ -192,3 +208,10 @@ isEmptyError (ErrorInKey _ e) = isEmptyError e
 isEmptyError (ErrorInValue ValueNotFound) = True
 isEmptyError (MultipleErrors ee) = all isEmptyError ee
 isEmptyError _ = False
+
+foldMapM :: (Monad m, Monoid b) => (a -> m b) -> [a] -> m b
+foldMapM _ [] = pure mempty
+foldMapM f (a : aa) = do
+  a' <- f a
+  aa' <- foldMapM f aa
+  pure $ a' <> aa'

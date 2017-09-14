@@ -5,8 +5,7 @@ module ReadInputs where
 import Data.Text (Text)
 --import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
-import ApSettings.Setting
-import ApSettings.Reader
+import ApSettings
 
 import Distribution.TestSuite
 import Base
@@ -26,7 +25,7 @@ data Sett000 = Sett000 {key0 :: Text, key1:: Text, key2 :: [Text],
                         key6 :: String, key7 :: Double} deriving (Show, Eq)
 
 sett0 :: Setting Sett0
-sett0 = structure $ Sett0 <$>
+sett0 = Sett0 <$>
   onKey "key0" `scalar` text <*>
   onKey "key1" `scalar` text <*>
   onKey "key2" `multiple` value text
@@ -38,7 +37,7 @@ sett000 = Sett000 <$>
   onKey "key0" `scalar` text <*>
   onKey "key1" `scalar` text <*>
   onKey "key2" `multiple` value text <*>
-  onKey "key3" (structure $  Sett0003 <$>
+  onKey "key3" (Sett0003 <$>
                    onKey "key30" `scalar` text <*>
                    onKey "key31" `multiple` value text
                ) <*>
@@ -56,7 +55,7 @@ fromFile file sett expected = do
     ym <- TIO.readFile file
     case readYaml ym of
       Nothing -> return . Finished . Fail $ "Could not parse settings file"
-      Just bare -> case readData sett bare of
+      Just bare -> case evaluateSetting sett [bare] of
         Left e -> return . Finished . Fail . show $ e
         Right sett' -> if sett' == expected then return . Finished $ Pass else return . Finished . Fail $ "Unexpected result: " ++ show sett'
 

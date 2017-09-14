@@ -21,20 +21,20 @@ data BareValue =
   TextualValue Text |
   NumericValue Scientific |
   BooleanValue Bool |
-  EmptyValue
+  EmptyValue deriving (Read, Show, Eq, Ord)
 
 -- | Unparsed data
 data BareData =
   Scalar BareValue |
   Multiple [BareData] |
-  Structure (M.HashMap Key BareData)
+  Structure (M.HashMap Key BareData) deriving (Read, Show, Eq)
 
 -- | Errors that may be found when parsing values
 data ValueError =
   ValueNotFound -- ^ There is no value
   | InvalidFormat Text Text -- ^ The data format is different from the expected: `InvalidFormat expected found`
   | ErrorMessage Text -- ^ An error message on reading
-  deriving (Show)
+  deriving (Read, Show, Eq, Ord)
 
 -- | Error display of unparsed scalars
 display :: BareValue -> Text
