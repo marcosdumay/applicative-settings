@@ -44,7 +44,7 @@ or a default value, marking it optional or other kinds of global effects.
   | AltSett (Setting a) (Setting a) -- ^ Setting alternatives
   | DefSett a (Setting a) -- ^ Holds the default value of a setting
   | DocSett Text (Setting a) -- ^ Holds the description of a setting
-  | LitSett Text (Setting a) -- ^ Hols the literary default value of a setting
+  | LitSett Text (Setting a) -- ^ Holds the literal default value of a setting
 instance Functor Setting where
   fmap f (ConstSett a) = ConstSett $ f <$> a
   fmap f (ScalarSett a) = ScalarSett $ mapScalar f a
