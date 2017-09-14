@@ -192,8 +192,22 @@ readData (DefSett a s) = \d -> let
 readData (DocSett _ s) = readData s
 readData (LitSett _ s) = readData s
 
+-- | Evaluates a list of settings 
 evaluateSetting :: Setting a -> [BareData] -> Either SettingError a
-evaluateSetting = readData
+evaluateSetting s dt = evaluate' dt []
+  where
+    -- Accumulates read data at the seccond parameter until the result
+    -- is not empty anymore.
+    --evaluate' :: [[BareData]] -> [[BareData]] -> Either SettingError a
+    evaluate' [] [] = Left SettingNotFound
+    evaluate' [] o = readData s o
+    evaluate' (n:nn) o = case readData s o of
+           m@(Left e) -> if isEmptyError e
+             then let
+             no = o ++ [n]
+             in evaluate' nn no
+             else m
+           v@(Right _) -> v
 
 mapLeft :: (a -> c) -> Either a b -> Either c b
 mapLeft f (Left e) = Left $ f e
