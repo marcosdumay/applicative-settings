@@ -1,8 +1,9 @@
-{-# LANGUAGE OverloadedStrings, FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings, FlexibleInstances, GeneralizedNewtypeDeriving, DeriveTraversable #-}
 
 module ApSettings.Values where
 
 import Data.Monoid ((<>))
+import Control.Applicative
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Scientific (Scientific)
@@ -45,12 +46,28 @@ display (BooleanValue b) = if b then "true" else "false"
 display EmptyValue = "null"
 
 -- | Parsed values
-type Value a = Either ValueError a
+newtype Value a = Value (Either ValueError a)
+  deriving(
+    Applicative,
+    Functor,
+    Monad,
+    Show,
+    Read,
+    Foldable,
+    Traversable,
+    Eq,
+    Ord)
+
+valueError :: ValueError -> Value a
+valueError = Value . Left
 
 instance Monoid (Value a) where
-  mempty = Left ValueNotFound
-  mappend (Left ValueNotFound) b = b
+  mempty = valueError ValueNotFound
+  mappend (Value (Left ValueNotFound)) b = b
   mappend a _ = a
+instance Alternative Value where
+  empty = mempty
+  (<|>) = mappend
 
 -- | Error display of scalar parsing results
 statusMessage :: ValueError -> Text

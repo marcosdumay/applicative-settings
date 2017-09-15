@@ -1,8 +1,9 @@
-{-# LANGUAGE ExistentialQuantification, RankNTypes, FlexibleInstances #-}
+{-# LANGUAGE ExistentialQuantification, RankNTypes, FlexibleInstances, GeneralizedNewtypeDeriving, DeriveTraversable, OverloadedStrings #-}
 
 module ApSettings.Setting where
 
 import Data.Text (Text)
+import qualified Data.Text as T
 import Control.Applicative
 import Data.Maybe (fromMaybe)
 import Data.Monoid
@@ -10,9 +11,6 @@ import ApSettings.Values
 --import Data.Default.Class
 --import Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
-
-import Debug.Trace
-
 
 type ScalarReader a = BareValue -> Value a
 mapScalar :: (a -> b) -> ScalarReader a -> ScalarReader b
@@ -126,47 +124,65 @@ data SettingError =
   | ErrorInKey Key SettingError
   | ErrorInValue ValueError
   | MultipleErrors [SettingError] deriving (Read, Show, Eq, Ord)
-instance Monoid (Either SettingError a) where
-  mempty = Left SettingNotFound
-  mappend a@(Left e) b = if isEmptyError e then b else a
-  mappend a _ = a
 
+newtype SettingResult a = SettingResult (Either SettingError a)
+  deriving (
+    Applicative,
+    Functor,
+    Monad,
+    Show,
+    Read,
+    Foldable,
+    Traversable,
+    Eq,
+    Ord)
+
+settingError :: SettingError -> SettingResult a
+settingError e = SettingResult . Left $ e
+
+instance Monoid (SettingResult a) where
+  mempty = settingError SettingNotFound
+  mappend a@(SettingResult (Left e)) b = if isEmptyError e then b else a
+  mappend a _ = a
+instance Alternative SettingResult where
+  empty = mempty
+  (<|>) = mappend
 
 catErrors :: SettingError -> SettingError -> SettingError
 catErrors (MultipleErrors ee) e = MultipleErrors $ ee <> [e]
 catErrors e (MultipleErrors ee) = MultipleErrors $ e : ee
 catErrors a b = MultipleErrors [a, b]
 
-readData :: Setting a -> [BareData] -> Either SettingError a
-readData (ConstSett Nothing) = const $ Left SettingNotFound
-readData (ConstSett (Just a)) = const $ Right a
+readData :: Setting a -> [BareData] -> SettingResult a
+readData (ConstSett Nothing) = const $ settingError SettingNotFound
+readData (ConstSett (Just a)) = const $ pure a
 readData (ScalarSett reader) = foldMap $ \d ->
   do
-    r <- unValue $ unScalar d
+    r <- unEVal $ unScalar d
     unValue $ reader r
 readData (ListSett f s) = \d -> do
-    dd <- mapM (unValue . unMultiple) d
+    dd <- mapM (unEVal . unMultiple) d
     -- dd :: [[BareValue]]
     -- Now, what does that mean?
     -- I must take the first list available in the settings,
     -- and drop anything else. Unless that is empty too,
     -- in case I take the second element, and so on.
     let unwrap ll = case ll of
-          [] -> Left . ErrorInValue $ ValueNotFound
+          [] -> settingError . ErrorInValue $ ValueNotFound
           (d':dd') -> case mapM (readData s) $ map (\x -> [x]) d' of
-            Left e -> if isEmptyError e then unwrap dd' else Left e
-            Right vv -> traceShow (length vv) $ pure $ f vv
-    traceShow dd $ unwrap dd
+            SettingResult (Left e) -> if isEmptyError e then unwrap dd' else settingError e
+            SettingResult (Right vv) -> pure $ f vv
+    unwrap dd
 readData (StructureSett m) = readData m
-readData (KeySett key reader) = \d -> mapLeft (ErrorInKey key) $
+readData (KeySett key reader) = \d -> mapSErr (ErrorInKey key) $
   do
-    v <- mapM (unValue . unStructure) d
+    v <- mapM (unEVal . unStructure) d
     let
-      lkup :: M.HashMap Key BareData -> Either SettingError BareData
+      lkup :: M.HashMap Key BareData -> SettingResult BareData
       lkup val = let
         v' = M.lookup key val :: Maybe BareData
         ve = fromMaybe (Left ValueNotFound) $ Right <$> v' :: Either ValueError BareData
-        in unValue ve
+        in unEVal ve
     d' <- mapM lkup v
     readData reader d'
 readData (MultiSett f x) = \d -> let
@@ -174,47 +190,59 @@ readData (MultiSett f x) = \d -> let
   vx = readData x d
   in apSett vf vx
   where
-    apSett (Left a) (Left b) = Left $ catErrors a b
-    apSett (Left a) (Right _) = Left a
-    apSett (Right _) (Left b) = Left b
-    apSett (Right a) (Right b) = Right $ a b
+    apSett (SettingResult (Left a)) (SettingResult (Left b)) = settingError $ catErrors a b
+    apSett (SettingResult (Left a)) (SettingResult (Right _)) = settingError a
+    apSett (SettingResult (Right _)) (SettingResult (Left b)) = settingError b
+    apSett (SettingResult (Right a)) (SettingResult (Right b)) = pure $ a b
 readData (AltSett a b) = \d -> let
   sa = readData a d
   sb = readData b d
   in case sa of
-    Left e -> if isEmptyError e then sb else sa
+    SettingResult (Left e) -> if isEmptyError e then sb else sa
     _ -> sa
 readData (DefSett a s) = \d -> let
   vs = readData s d
   in case vs of
-       Left e -> if isEmptyError e then pure a else vs
+       SettingResult (Left e) -> if isEmptyError e then pure a else vs
        _ -> vs
 readData (DocSett _ s) = readData s
 readData (LitSett _ s) = readData s
 
 -- | Evaluates a list of settings 
-evaluateSetting :: Setting a -> [BareData] -> Either SettingError a
-evaluateSetting s dt = evaluate' dt []
+evaluateSetting :: Setting a -> [BareData] -> Either [Text] a
+evaluateSetting s dt = case r of
+  SettingResult (Left e) -> Left $ errorMessage e
+  SettingResult (Right v) -> Right v
   where
+    r = evaluate' dt []
     -- Accumulates read data at the seccond parameter until the result
     -- is not empty anymore.
     --evaluate' :: [[BareData]] -> [[BareData]] -> Either SettingError a
-    evaluate' [] [] = Left SettingNotFound
+    evaluate' [] [] = settingError SettingNotFound
     evaluate' [] o = readData s o
     evaluate' (n:nn) o = case readData s o of
-           m@(Left e) -> if isEmptyError e
+           m@(SettingResult (Left e)) -> if isEmptyError e
              then let
              no = o ++ [n]
              in evaluate' nn no
              else m
-           v@(Right _) -> v
+           v@(SettingResult (Right _)) -> v
 
-mapLeft :: (a -> c) -> Either a b -> Either c b
-mapLeft f (Left e) = Left $ f e
-mapLeft _ (Right a) = Right a
+mapErr :: (a -> SettingError) -> Either a b -> SettingResult b
+mapErr f (Left e) = settingError $ f e
+mapErr _ (Right a) = pure a
 
-unValue :: Value a -> Either SettingError a
-unValue = mapLeft ErrorInValue
+mapSErr :: (SettingError -> SettingError) -> SettingResult a -> SettingResult a
+mapSErr f (SettingResult (Left e)) = settingError $ f e
+mapSErr _ v@(SettingResult (Right _)) = v
+
+unEVal :: Either ValueError a -> SettingResult a
+unEVal (Left e) = settingError . ErrorInValue $ e
+unEVal (Right v) = pure v
+
+unValue :: Value a -> SettingResult a
+unValue (Value (Right v)) = pure v
+unValue (Value (Left e)) = settingError . ErrorInValue $ e
 
 isEmptyError :: SettingError -> Bool
 isEmptyError SettingNotFound = True
@@ -229,3 +257,12 @@ foldMapM f (a : aa) = do
   a' <- f a
   aa' <- foldMapM f aa
   pure $ a' <> aa'
+
+errorMessage :: SettingError -> [Text]
+errorMessage SettingNotFound = ["setting not found"]
+errorMessage ParserError = ["parser error"]
+errorMessage (ErrorInKey k e) = ["in key " <> k <> ": " <> emsg]
+  where
+    emsg = T.intercalate ", " $ errorMessage e 
+errorMessage (ErrorInValue e) = [statusMessage e]
+errorMessage (MultipleErrors ee) = concat $ fmap errorMessage ee
