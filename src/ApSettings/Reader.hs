@@ -7,10 +7,7 @@ import Data.Text (Text)
 import Data.String (IsString, fromString)
 import qualified Data.Text as T
 import ApSettings.Values
---import qualified ApSettings.Reader.Yaml as Y
 import qualified Data.Scientific as Sci
---import Data.Maybe (isJust)
---import Data.Text.Encoding (encodeUtf8, decodeUtf8')
 import Text.Read (readMaybe)
 import qualified Data.Char as C
 

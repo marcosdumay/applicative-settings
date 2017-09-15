@@ -8,8 +8,6 @@ import Control.Applicative
 import Data.Maybe (fromMaybe)
 import Data.Monoid
 import ApSettings.Values
---import Data.Default.Class
---import Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 
 type ScalarReader a = BareValue -> Value a
@@ -209,8 +207,8 @@ readData (DocSett _ s) = readData s
 readData (LitSett _ s) = readData s
 
 -- | Evaluates a list of settings 
-evaluateSetting :: Setting a -> [BareData] -> Either [Text] a
-evaluateSetting s dt = case r of
+evalSett :: Setting a -> [BareData] -> Either [Text] a
+evalSett s dt = case r of
   SettingResult (Left e) -> Left $ errorMessage e
   SettingResult (Right v) -> Right v
   where

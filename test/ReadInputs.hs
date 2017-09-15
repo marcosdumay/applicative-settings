@@ -3,8 +3,6 @@
 module ReadInputs where
 
 import Data.Text (Text)
---import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
 import ApSettings
 
 import Distribution.TestSuite
@@ -12,8 +10,8 @@ import Base
 
 tests :: IO [Test]
 tests = return [
-  simpleTest "Reading 0" $ fromFile "test/inputs/input000.yaml" sett0 expected0,
-  simpleTest "Reading 000" $ fromFile "test/inputs/input000.yaml" sett000 expected000
+  simpleTest "Reading 0" $ testFile "test/inputs/input000.yaml" sett0 expected0,
+  simpleTest "Reading 000" $ testFile "test/inputs/input000.yaml" sett000 expected000
   ]
 
 
@@ -50,12 +48,12 @@ expected000 = Sett000 "value0" "value1" ["value20", "value21"] (
   Sett0003 "value30" ["value310", "value311"]
   ) True 100000000 "value 6 has spaces" 7.5
 
-fromFile :: (Show a, Eq a) => String -> Setting a -> a -> IO Progress
-fromFile file sett expected = do
-    ym <- TIO.readFile file
-    case readYaml ym of
+testFile :: (Show a, Eq a) => String -> Setting a -> a -> IO Progress
+testFile file sett expected = do
+    ym <- readYaml <$> fromFile file
+    case ym of
       Nothing -> return . Finished . Fail $ "Could not parse settings file"
-      Just bare -> case evaluateSetting sett [bare] of
+      Just bare -> case evalSett sett [bare] of
         Left e -> return . Finished . Fail . show $ e
         Right sett' -> if sett' == expected then return . Finished $ Pass else return . Finished . Fail $ "Unexpected result: " ++ show sett'
 

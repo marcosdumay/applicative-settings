@@ -34,7 +34,6 @@ module ApSettings (
   real,
   text,
   bool,
-  optional,
   readable,
   ScalarReader,
   Setting(..),
@@ -43,16 +42,21 @@ module ApSettings (
   value,
   scalar,
   multiple,
-  evaluateSetting,
-  readYaml
+  evalSett,
+  readYaml,
+  fromFile
   ) where
 
 import ApSettings.Values
 import ApSettings.Reader
 import ApSettings.Setting
 import qualified ApSettings.Reader.Yaml as Y
+import Data.Text (Text)
+import qualified Data.Text.IO as TIO
 
 -- | Reads an YAML file into unparsed data
 readYaml :: SettingsReader
 readYaml = Y.parse
 
+fromFile :: String -> IO Text
+fromFile = TIO.readFile
