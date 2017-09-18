@@ -121,6 +121,7 @@ data SettingError =
   | ParserError
   | ErrorInKey Key SettingError
   | ErrorInValue ValueError
+  | FileError [Text]
   | MultipleErrors [SettingError] deriving (Read, Show, Eq, Ord)
 
 newtype SettingResult a = SettingResult (Either SettingError a)
@@ -207,7 +208,7 @@ readData (DocSett _ s) = readData s
 readData (LitSett _ s) = readData s
 
 -- | Evaluates a list of settings 
-evalSett :: Setting a -> [BareData] -> Either [Text] a
+evalSett :: Setting a -> [Either [Text] BareData] -> Either [Text] a
 evalSett s dt = case r of
   SettingResult (Left e) -> Left $ errorMessage e
   SettingResult (Right v) -> Right v
@@ -218,13 +219,15 @@ evalSett s dt = case r of
     --evaluate' :: [[BareData]] -> [[BareData]] -> Either SettingError a
     evaluate' [] [] = settingError SettingNotFound
     evaluate' [] o = readData s o
-    evaluate' (n:nn) o = case readData s o of
-           m@(SettingResult (Left e)) -> if isEmptyError e
-             then let
-             no = o ++ [n]
-             in evaluate' nn no
-             else m
-           v@(SettingResult (Right _)) -> v
+    evaluate' (n:nn) o = case n of
+      Left e -> settingError $ FileError e -- Used a bad file, results are bad, no need to go further
+      Right n' -> case readData s o of
+                    m@(SettingResult (Left e)) -> if isEmptyError e
+                      then let
+                      no = o ++ [n'] -- Unwraps the settings before pushing there
+                      in evaluate' nn no
+                      else m
+                    v@(SettingResult (Right _)) -> v
 
 mapErr :: (a -> SettingError) -> Either a b -> SettingResult b
 mapErr f (Left e) = settingError $ f e
@@ -259,8 +262,7 @@ foldMapM f (a : aa) = do
 errorMessage :: SettingError -> [Text]
 errorMessage SettingNotFound = ["setting not found"]
 errorMessage ParserError = ["parser error"]
-errorMessage (ErrorInKey k e) = ["in key " <> k <> ": " <> emsg]
-  where
-    emsg = T.intercalate ", " $ errorMessage e 
+errorMessage (ErrorInKey k e) = map (("in key " <> k <> ": ") <>) $ errorMessage e
 errorMessage (ErrorInValue e) = [statusMessage e]
+errorMessage (FileError ee) = ee
 errorMessage (MultipleErrors ee) = concat $ fmap errorMessage ee

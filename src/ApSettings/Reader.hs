@@ -11,7 +11,7 @@ import qualified Data.Scientific as Sci
 import Text.Read (readMaybe)
 import qualified Data.Char as C
 
-type SettingsReader = T.Text -> Maybe BareData
+type SettingsReader = T.Text -> Either [Text] BareData
 
 -- | Parses the textual representation of a scalar with a user-supplied function
 withText :: IsString t => (t -> Either Text a) -> BareValue -> Value a

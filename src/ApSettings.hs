@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 {- |
 #How to use
 
@@ -52,11 +54,22 @@ import ApSettings.Reader
 import ApSettings.Setting
 import qualified ApSettings.Reader.Yaml as Y
 import Data.Text (Text)
+import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
+import System.IO.Error
+import Data.Monoid ((<>))
 
 -- | Reads an YAML file into unparsed data
 readYaml :: SettingsReader
 readYaml = Y.parse
 
-fromFile :: String -> IO Text
-fromFile = TIO.readFile
+fromFile :: SettingsReader -> String -> IO (Either [Text] BareData)
+fromFile reader file = catchIOError (
+  do
+    tx <- TIO.readFile file
+    case reader tx of
+      Left e -> pure . Left $ map filemsg e
+      Right v -> pure . Right $ v
+  ) (\e -> pure $ Left [filemsg . T.pack . show $ e])
+  where
+    filemsg = (("in file " <> T.pack file <> ": ") <>)

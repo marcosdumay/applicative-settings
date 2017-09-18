@@ -50,10 +50,8 @@ expected000 = Sett000 "value0" "value1" ["value20", "value21"] (
 
 testFile :: (Show a, Eq a) => String -> Setting a -> a -> IO Progress
 testFile file sett expected = do
-    ym <- readYaml <$> fromFile file
-    case ym of
-      Nothing -> return . Finished . Fail $ "Could not parse settings file"
-      Just bare -> case evalSett sett [bare] of
-        Left e -> return . Finished . Fail . show $ e
-        Right sett' -> if sett' == expected then return . Finished $ Pass else return . Finished . Fail $ "Unexpected result: " ++ show sett'
+    ym <- fromFile readYaml file
+    case evalSett sett [ym] of
+      Left e -> return . Finished . Fail . show $ e
+      Right sett' -> if sett' == expected then return . Finished $ Pass else return . Finished . Fail $ "Unexpected result: " ++ show sett'
 
